@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package com.bowhead.bluetoothdemo;
+
+message BluetoothData
+{
+    string name = 1;
+    bytes avatar = 2;
+}
