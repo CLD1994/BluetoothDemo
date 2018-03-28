@@ -275,9 +275,9 @@ public class MainActivity extends AppCompatActivity{
                     ScanResult result = mData.get(holder.getLayoutPosition());
                     Intent intent = new Intent(MainActivity.this, DetailActivity.class);
                     intent.putExtra("BluetoothDevice", result);
-                    mBluetoothServer.stopAdvertising();
-                    mBluetoothServer.stopServer();
-                    mBluetoothClient.stopScan(mScanCallback);
+//                    mBluetoothServer.stopAdvertising();
+//                    mBluetoothServer.stopServer();
+//                    mBluetoothClient.stopScan(mScanCallback);
                     startActivity(intent);
                 }
             });

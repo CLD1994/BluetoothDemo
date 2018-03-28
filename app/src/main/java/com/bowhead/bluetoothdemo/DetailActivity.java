@@ -43,8 +43,6 @@ public class DetailActivity extends AppCompatActivity {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
 
-            mBluetoothGatt = gatt;
-
             Logger.d("status = %d", status);
 
             BluetoothDevice device = gatt.getDevice();
@@ -61,11 +59,8 @@ public class DetailActivity extends AppCompatActivity {
                     Logger.d("%s disconnected", name);
                 }
             }else {
-                gatt.disconnect();
-                gatt.close();
-                refreshDeviceCache(mBluetoothGatt);
+//                closeGatt();
                 mBluetoothGatt = mDevice.getDevice().connectGatt(DetailActivity.this, true, this, TRANSPORT_LE);
-                refreshDeviceCache(mBluetoothGatt);
             }
         }
 
@@ -145,7 +140,7 @@ public class DetailActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 mBluetoothGatt = mDevice.getDevice().connectGatt(DetailActivity.this, false, mGattCallback, TRANSPORT_LE);
-                refreshDeviceCache(mBluetoothGatt);
+//                refreshDeviceCache(mBluetoothGatt);
             }
         });
     }
