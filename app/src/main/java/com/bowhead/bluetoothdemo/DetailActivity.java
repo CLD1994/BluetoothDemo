@@ -2,118 +2,61 @@ package com.bowhead.bluetoothdemo;
 
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothClient;
+import com.bowhead.bluetoothdemo.bluetooth.ble.GululuProfile;
 import com.orhanobut.logger.Logger;
 
-import java.lang.reflect.Method;
 import java.util.Locale;
 
-import static android.bluetooth.BluetoothDevice.TRANSPORT_LE;
 import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
-import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 
-public class DetailActivity extends AppCompatActivity {
+public class DetailActivity extends AppCompatActivity implements Handler.Callback{
+
+    public static final int MSG_START_PAIR = 0;
 
     private ScanResult mDevice;
 
-    private BluetoothGatt mBluetoothGatt;
-
-    private BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+    private BluetoothClient.GattConnectCallback mGattConnectCallback = new BluetoothClient.GattConnectCallback() {
         @Override
-        public void onPhyUpdate(BluetoothGatt gatt, int txPhy, int rxPhy, int status) {
-
+        public void onGattReady(BluetoothGatt gatt) {
+            Logger.d("%s is ready", gatt.getDevice().getName());
+            new Handler(Looper.getMainLooper(), DetailActivity.this).obtainMessage(MSG_START_PAIR).sendToTarget();
         }
 
         @Override
-        public void onPhyRead(BluetoothGatt gatt, int txPhy, int rxPhy, int status) {
-
+        public void onGattDisconnected(BluetoothGatt gatt) {
+            Logger.d("%s is disconnected", gatt.getDevice().getName());
         }
 
         @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-
-            Logger.d("status = %d", status);
-
-            BluetoothDevice device = gatt.getDevice();
-            String name = device.getName();
-
-            if (name == null || name.equals("")){
-                name = device.getAddress();
-            }
-
-            if (status == GATT_SUCCESS){
-                if (newState == STATE_CONNECTED){
-                    Logger.d("%s connected", name);
-                }else if (newState == BluetoothProfile.STATE_DISCONNECTED){
-                    Logger.d("%s disconnected", name);
-                }
-            }else {
-//                closeGatt();
-                mBluetoothGatt = mDevice.getDevice().connectGatt(DetailActivity.this, true, this, TRANSPORT_LE);
-            }
-        }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            Logger.d("status = %d", status);
-        }
-
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-
-        }
-
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-
-        }
-
-        @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-
-        }
-
-        @Override
-        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-
-        }
-
-        @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-
-        }
-
-        @Override
-        public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
-
-        }
-
-        @Override
-        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
-
-        }
-
-        @Override
-        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-
+        public void onError(String errorMsg) {
+            Logger.e(errorMsg);
         }
     };
+
+    private BluetoothClient mBluetoothClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_detail);
+
+
+
+        mBluetoothClient = new BluetoothClient(this);
+
         mDevice = getIntent().getParcelableExtra("BluetoothDevice");
 
         TextView tvName = findViewById(R.id.tv_name);
@@ -139,49 +82,40 @@ public class DetailActivity extends AppCompatActivity {
         findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mBluetoothGatt = mDevice.getDevice().connectGatt(DetailActivity.this, false, mGattCallback, TRANSPORT_LE);
-//                refreshDeviceCache(mBluetoothGatt);
+                mBluetoothClient.connectGatt(mDevice.getDevice(), mGattConnectCallback);
             }
         });
-    }
-
-    private boolean refreshDeviceCache(BluetoothGatt gatt){
-        try {
-            BluetoothGatt localBluetoothGatt = gatt;
-            Method localMethod = localBluetoothGatt.getClass().getMethod("refresh", new Class[0]);
-            if (localMethod != null) {
-                boolean bool = ((Boolean) localMethod.invoke(localBluetoothGatt, new Object[0])).booleanValue();
-                return bool;
-            }
-        }
-        catch (Exception localException) {
-            Log.e("CLD", "An exception occured while refreshing device");
-        }
-        return false;
-    }
-
-    private void closeGatt(){
-        mBluetoothGatt.disconnect();
-        refreshDeviceCache(mBluetoothGatt);
-        mBluetoothGatt.close();
-        mBluetoothGatt = null;
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (mBluetoothGatt != null){
-            closeGatt();
+        mBluetoothClient.closeGatt();
+    }
+
+    @Override
+    public boolean handleMessage(Message msg) {
+        switch (msg.what){
+            case MSG_START_PAIR:
+                boolean isSucceed = mBluetoothClient.readCharacteristic(GululuProfile.PAIR_SERVICE, GululuProfile.CUP_SN, new BluetoothClient.CharacteristicResponse() {
+                    @Override
+                    public void onResponse(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                        if (status == GATT_SUCCESS){
+                            final String cupSn = characteristic.getStringValue(0);
+                            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(DetailActivity.this.getApplicationContext(), cupSn, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
+                    }
+                });
+                if (!isSucceed){
+                    Logger.e("readCharacteristic fail");
+                }
+                break;
         }
+        return true;
     }
 }

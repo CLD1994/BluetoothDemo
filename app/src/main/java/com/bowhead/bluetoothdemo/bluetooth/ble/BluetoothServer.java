@@ -166,13 +166,15 @@ public class BluetoothServer {
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()
-                .setIncludeDeviceName(false)
+                .setIncludeDeviceName(true)
                 .setIncludeTxPowerLevel(false)
+                .build();
+
+        AdvertiseData scanResponseData = new AdvertiseData.Builder()
                 .addServiceUuid(new ParcelUuid(GululuProfile.PAIR_SERVICE))
                 .build();
 
-        mBleAdvertiser
-                .startAdvertising(settings, data, mAdvertiseCallback);
+        mBleAdvertiser.startAdvertising(settings, data, scanResponseData, mAdvertiseCallback);
 
         return true;
     }

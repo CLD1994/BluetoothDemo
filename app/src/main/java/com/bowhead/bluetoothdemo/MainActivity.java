@@ -5,12 +5,15 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.ParcelUuid;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
@@ -26,18 +29,16 @@ import com.bowhead.bluetoothdemo.bluetooth.BluetoothReceiver;
 import com.bowhead.bluetoothdemo.bluetooth.ScanResultList;
 import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothClient;
 import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothServer;
+import com.bowhead.bluetoothdemo.bluetooth.ble.GululuProfile;
 import com.bowhead.bluetoothdemo.bluetooth.classic.BluetoothSocketListener;
 import com.bowhead.bluetoothdemo.bluetooth.classic.BluetoothSocketWrap;
-import com.orhanobut.logger.AndroidLogAdapter;
 import com.orhanobut.logger.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity{
-
-    private boolean isLogInit = false;
-
     private MyAdapter mAdapter;
 
     private ScanResultList mData = new ScanResultList();
@@ -53,6 +54,10 @@ public class MainActivity extends AppCompatActivity{
     private BluetoothReceiver mBluetoothReceiver;
 
     private IntentFilter mIntentFilter = BluetoothReceiver.getIntentFilter();
+
+    private List<ScanFilter> mScanFilters = new ArrayList<>();
+
+    private ScanSettings mScanSettings;
 
     private boolean needOnBluetoothOpenScan = false;
 
@@ -95,19 +100,28 @@ public class MainActivity extends AppCompatActivity{
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        if (!isLogInit){
-            Logger.addLogAdapter(new AndroidLogAdapter());
-            isLogInit = true;
-        }
-
         BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
 
         if (bluetoothManager != null){
             mBluetoothServer = new BluetoothServer(this, bluetoothManager);
 
-            mBluetoothClient = new BluetoothClient(bluetoothManager);
+            mBluetoothClient = new BluetoothClient(this);
 
             mSocketListener = new BluetoothSocketListener(bluetoothManager.getAdapter());
+
+            ScanFilter scanFilter = new ScanFilter.Builder()
+                    .setServiceUuid(new ParcelUuid(GululuProfile.PAIR_SERVICE))
+                    .build();
+
+            mScanFilters.add(scanFilter);
+
+            mScanSettings = new ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                    .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+                    .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
+                    .setReportDelay(1000)
+                    .build();
 
             mBluetoothReceiver = new BluetoothReceiver(new BluetoothReceiver.Listener() {
                 @Override
@@ -117,7 +131,7 @@ public class MainActivity extends AppCompatActivity{
                         mBluetoothServer.startServer();
                         mBluetoothServer.startAdvertising();
                         if (needOnBluetoothOpenScan){
-                            mBluetoothClient.startScan(mScanCallback);
+                            mBluetoothClient.startScan(mScanFilters, mScanSettings, mScanCallback, 15000);
                         }
                     }else if (state == BluetoothAdapter.STATE_TURNING_OFF){
                         Logger.d("bluetooth off");
@@ -203,7 +217,7 @@ public class MainActivity extends AppCompatActivity{
             public void onClick(View v) {
                 if (mBluetoothClient.isBluetoothEnabled()){
                     Logger.d("scanButton click");
-                    mBluetoothClient.startScan(mScanCallback);
+                    mBluetoothClient.startScan(mScanFilters, mScanSettings, mScanCallback, 15000);
                 }else {
                     mBluetoothClient.enableBluetooth();
                     needOnBluetoothOpenScan = true;
@@ -275,9 +289,9 @@ public class MainActivity extends AppCompatActivity{
                     ScanResult result = mData.get(holder.getLayoutPosition());
                     Intent intent = new Intent(MainActivity.this, DetailActivity.class);
                     intent.putExtra("BluetoothDevice", result);
-//                    mBluetoothServer.stopAdvertising();
-//                    mBluetoothServer.stopServer();
-//                    mBluetoothClient.stopScan(mScanCallback);
+                    mBluetoothServer.stopAdvertising();
+                    mBluetoothServer.stopServer();
+                    mBluetoothClient.stopScan(mScanCallback);
                     startActivity(intent);
                 }
             });
