@@ -50,7 +50,12 @@ public class BluetoothSocketListener {
             public boolean handleMessage(Message msg) {
                 switch (msg.what){
                     case MSG_ACCEPT:
-                        callback.onAcceptSocket((BluetoothSocket) msg.obj);
+                        try {
+                            BluetoothSocketWrap socketWrap = new BluetoothSocketWrap((BluetoothSocket) msg.obj);
+                            callback.onAcceptSocket(socketWrap);
+                        } catch (IOException e) {
+                            callback.onError(e);
+                        }
                         break;
                     case MSG_ERROR:
                         callback.onError((IOException) msg.obj);
@@ -81,7 +86,7 @@ public class BluetoothSocketListener {
         private final BluetoothServerSocket mmServerSocket;
         private final Handler mmHandler;
 
-        public ListenerThread(BluetoothAdapter adapter, Handler handler){
+        private ListenerThread(BluetoothAdapter adapter, Handler handler){
             BluetoothServerSocket temp = null;
             mmHandler = handler;
             try {
@@ -108,7 +113,7 @@ public class BluetoothSocketListener {
             }
         }
 
-        public void cancel() {
+        private void cancel() {
             try {
                 mmHandler.sendEmptyMessageDelayed(MSG_CANCEL_LISTEN, 200);
                 mmServerSocket.close();
@@ -122,7 +127,7 @@ public class BluetoothSocketListener {
     }
 
     public interface Callback {
-        void onAcceptSocket(BluetoothSocket socket);
+        void onAcceptSocket(BluetoothSocketWrap socket);
         void onError(IOException e);
         void onStopListen();
     }

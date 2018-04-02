@@ -1,4 +1,4 @@
-package com.bowhead.bluetoothdemo.bluetooth.ble;
+package com.bowhead.bluetoothdemo.bluetooth;
 
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -16,6 +16,8 @@ import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.content.Context;
 import android.os.ParcelUuid;
 
+import com.bowhead.bluetoothdemo.GululuProfile;
+import com.bowhead.bluetoothdemo.bluetooth.classic.BluetoothSocketListener;
 import com.orhanobut.logger.Logger;
 
 import java.nio.charset.StandardCharsets;
@@ -26,9 +28,9 @@ import java.nio.charset.StandardCharsets;
 
 public class BluetoothServer {
 
-    private final Context mAppContext;
-
     private final BluetoothManager mBluetoothManager;
+
+    private BluetoothSocketListener mSocketListener;
 
     private BluetoothGattServer mBluetoothGattServer;
 
@@ -127,13 +129,26 @@ public class BluetoothServer {
         }
     };
 
-    public BluetoothServer(Context context, BluetoothManager bluetoothManager) {
-        mAppContext = context.getApplicationContext();
+    public BluetoothServer(BluetoothManager bluetoothManager) {
         mBluetoothManager = bluetoothManager;
     }
 
-    public boolean startServer(){
-        mBluetoothGattServer = mBluetoothManager.openGattServer(mAppContext, mGattServerCallback);
+    public boolean listenConnect(BluetoothSocketListener.Callback callback) {
+        if (mSocketListener != null){
+            return false;
+        }
+
+        mSocketListener = new BluetoothSocketListener(mBluetoothManager.getAdapter());
+        return mSocketListener.listenConnect(callback);
+    }
+
+    public void stopListenConnect() {
+        mSocketListener.stopListenConnect();
+        mSocketListener = null;
+    }
+
+    public boolean startGattServer(Context context){
+        mBluetoothGattServer = mBluetoothManager.openGattServer(context.getApplicationContext(), mGattServerCallback);
         if (mBluetoothGattServer == null) {
             return false;
         }
@@ -143,7 +158,7 @@ public class BluetoothServer {
         return true;
     }
 
-    public void stopServer(){
+    public void stopGattServer(){
         if (mBluetoothGattServer == null){
             return;
         }

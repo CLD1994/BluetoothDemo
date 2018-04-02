@@ -9,7 +9,6 @@ import android.util.Log;
 
 import com.bowhead.bluetoothdemo.BluetoothDataOuterClass;
 import com.google.protobuf.CodedOutputStream;
-import com.google.protobuf.InvalidProtocolBufferException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,13 +21,16 @@ import java.io.OutputStream;
 public class BluetoothSocketWrap {
     private static final int MSG_WRITE = 1;
     private static final int MSG_RECEIVE_DATA = 2;
-    private static final int MSG_ERROR = 3;
-    private static final int MSG_DISCONNECT = 4;
+    private static final int MSG_READ_ERROR = 3;
+    private static final int MSG_WRITE_ERROR = 4;
 
-    public interface Callback {
+    public interface ReadCallback {
         void onReceive(BluetoothDataOuterClass.BluetoothData data);
         void onError(Exception e);
-        void onDisconnect();
+    }
+
+    public interface WriteCallback {
+        void onError(Exception e);
     }
 
     private Handler mUIHandler;
@@ -43,10 +45,15 @@ public class BluetoothSocketWrap {
 
     private OutputStream mOutputStream;
 
+    private ReadCallback mReadCallback;
+
+    private WriteCallback mWriteCallback;
+
+    private Thread mReadThread;
+
     private int mMaxPacketSize;
 
-    public BluetoothSocketWrap(BluetoothSocket socket, final Callback callback) {
-        try {
+    BluetoothSocketWrap(BluetoothSocket socket) throws IOException{
             mSocket = socket;
             mInputStream = mSocket.getInputStream();
             mOutputStream = mSocket.getOutputStream();
@@ -60,15 +67,14 @@ public class BluetoothSocketWrap {
                         case MSG_RECEIVE_DATA:
                             BluetoothDataOuterClass.BluetoothData data = (BluetoothDataOuterClass.BluetoothData) msg.obj;
                             Log.d("CLD", "onReceive");
-                            callback.onReceive(data);
+                            mReadCallback.onReceive(data);
                             break;
-                        case MSG_ERROR:
+                        case MSG_READ_ERROR:
                             Log.d("CLD", "onError");
-                            callback.onError((Exception) msg.obj);
+                            mReadCallback.onError((Exception) msg.obj);
                             break;
-                        case MSG_DISCONNECT:
-                            Log.d("CLD", "onDisconnect");
-                            callback.onDisconnect();
+                        case MSG_WRITE_ERROR:
+                            mWriteCallback.onError((Exception) msg.obj);
                             break;
                     }
                     return true;
@@ -77,6 +83,7 @@ public class BluetoothSocketWrap {
 
             mHandlerThread = new HandlerThread("socketWriteThread");
             mHandlerThread.start();
+
             mWorkHandler = new Handler(mHandlerThread.getLooper(), new Handler.Callback() {
                 @Override
                 @SuppressWarnings("unchecked")
@@ -94,21 +101,22 @@ public class BluetoothSocketWrap {
                                 mOutputStream.flush();
                                 Log.d("CLD", "write ok");
                             } catch (IOException e) {
-                                mUIHandler.obtainMessage(MSG_ERROR, e).sendToTarget();
+                                mUIHandler.obtainMessage(MSG_WRITE_ERROR, e).sendToTarget();
                             }
                             break;
                     }
                     return true;
                 }
             });
-
-        } catch (IOException e) {
-            callback.onError(e);
-        }
     }
 
-    public void startRead(){
-        new Thread(new Runnable() {
+    public void startRead(ReadCallback callback){
+        if (mReadThread != null){
+            return;
+        }
+
+        mReadCallback = callback;
+        mReadThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 while (true) {
@@ -118,24 +126,17 @@ public class BluetoothSocketWrap {
                         Log.d("CLD", "read ok");
                         mUIHandler.obtainMessage(MSG_RECEIVE_DATA, data).sendToTarget();
                     } catch (IOException e) {
-                        if (e instanceof InvalidProtocolBufferException){
-                            if (e.getCause() instanceof IOException){
-                                Log.d("CLD", Log.getStackTraceString(e.getCause()));
-                                mHandlerThread.quit();
-                                mUIHandler.obtainMessage(MSG_DISCONNECT).sendToTarget();
-                            }else {
-                                mUIHandler.obtainMessage(MSG_ERROR, e).sendToTarget();
-                            }
-                        }
+                        mUIHandler.obtainMessage(MSG_READ_ERROR, e).sendToTarget();
                         break;
                     }
                 }
             }
-        }).start();
+        });
+        mReadThread.start();
     }
 
-    public void write(BluetoothDataOuterClass.BluetoothData data){
-        Log.d("CLD", "sent write msg");
+    public void write(BluetoothDataOuterClass.BluetoothData data, WriteCallback writeCallback){
+        mWriteCallback = writeCallback;
         mWorkHandler.obtainMessage(MSG_WRITE, data).sendToTarget();
     }
 
@@ -150,7 +151,11 @@ public class BluetoothSocketWrap {
         }
         mHandlerThread.quit();
         mHandlerThread = null;
+
         mWorkHandler = null;
         mUIHandler = null;
+
+        mReadCallback = null;
+        mWriteCallback = null;
     }
 }

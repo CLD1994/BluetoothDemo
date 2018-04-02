@@ -2,41 +2,40 @@ package com.bowhead.bluetoothdemo;
 
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothClient;
-import com.bowhead.bluetoothdemo.bluetooth.ble.GululuProfile;
+import com.bowhead.bluetoothdemo.bluetooth.BluetoothClient;
+import com.bowhead.bluetoothdemo.bluetooth.ble.BleConnector;
+import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothGattWrap;
 import com.orhanobut.logger.Logger;
 
 import java.util.Locale;
 
 import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
 
-public class DetailActivity extends AppCompatActivity implements Handler.Callback{
-
-    public static final int MSG_START_PAIR = 0;
+public class DetailActivity extends AppCompatActivity{
 
     private ScanResult mDevice;
 
-    private BluetoothClient.GattConnectCallback mGattConnectCallback = new BluetoothClient.GattConnectCallback() {
+    private BluetoothGattWrap mGatt;
+
+    private BleConnector.GattConnectCallback mGattConnectCallback = new BleConnector.GattConnectCallback() {
         @Override
-        public void onGattReady(BluetoothGatt gatt) {
+        public void onGattReady(BluetoothGattWrap gatt) {
             Logger.d("%s is ready", gatt.getDevice().getName());
-            new Handler(Looper.getMainLooper(), DetailActivity.this).obtainMessage(MSG_START_PAIR).sendToTarget();
+            mGatt = gatt;
+            CupPair(gatt);
         }
 
         @Override
-        public void onGattDisconnected(BluetoothGatt gatt) {
+        public void onGattDisconnected(BluetoothGattWrap gatt) {
             Logger.d("%s is disconnected", gatt.getDevice().getName());
         }
 
@@ -53,9 +52,7 @@ public class DetailActivity extends AppCompatActivity implements Handler.Callbac
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_detail);
 
-
-
-        mBluetoothClient = new BluetoothClient(this);
+        mBluetoothClient = BluetoothClient.getInstance(this);
 
         mDevice = getIntent().getParcelableExtra("BluetoothDevice");
 
@@ -82,7 +79,10 @@ public class DetailActivity extends AppCompatActivity implements Handler.Callbac
         findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mBluetoothClient.connectGatt(mDevice.getDevice(), mGattConnectCallback);
+                boolean isSucceed = mBluetoothClient.connectGatt(DetailActivity.this, mDevice.getDevice(), mGattConnectCallback);
+                if (!isSucceed){
+                    Logger.d("already connected");
+                }
             }
         });
     }
@@ -90,32 +90,25 @@ public class DetailActivity extends AppCompatActivity implements Handler.Callbac
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        mBluetoothClient.closeGatt();
+        mGatt.close();
+        mGatt = null;
     }
 
-    @Override
-    public boolean handleMessage(Message msg) {
-        switch (msg.what){
-            case MSG_START_PAIR:
-                boolean isSucceed = mBluetoothClient.readCharacteristic(GululuProfile.PAIR_SERVICE, GululuProfile.CUP_SN, new BluetoothClient.CharacteristicResponse() {
-                    @Override
-                    public void onResponse(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-                        if (status == GATT_SUCCESS){
-                            final String cupSn = characteristic.getStringValue(0);
-                            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Toast.makeText(DetailActivity.this.getApplicationContext(), cupSn, Toast.LENGTH_LONG).show();
-                                }
-                            });
-                        }
+    private void CupPair(BluetoothGattWrap gatt){
+        for (int i = 0; i < 10; i++){
+            boolean isSucceed = gatt.readCharacteristic(GululuProfile.PAIR_SERVICE, GululuProfile.CUP_SN, new BluetoothGattCallback() {
+                @Override
+                public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                    if (status == GATT_SUCCESS){
+                        final String cupSn = characteristic.getStringValue(0);
+                        Logger.d(cupSn);
                     }
-                });
-                if (!isSucceed){
-                    Logger.e("readCharacteristic fail");
                 }
-                break;
+            });
+
+            if (!isSucceed){
+                Logger.e("readCharacteristic fail");
+            }
         }
-        return true;
     }
 }

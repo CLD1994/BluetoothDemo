@@ -3,7 +3,6 @@ package com.bowhead.bluetoothdemo;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
@@ -25,11 +24,10 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.bowhead.bluetoothdemo.bluetooth.BluetoothClient;
 import com.bowhead.bluetoothdemo.bluetooth.BluetoothReceiver;
-import com.bowhead.bluetoothdemo.bluetooth.ScanResultList;
-import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothClient;
-import com.bowhead.bluetoothdemo.bluetooth.ble.BluetoothServer;
-import com.bowhead.bluetoothdemo.bluetooth.ble.GululuProfile;
+import com.bowhead.bluetoothdemo.bluetooth.BluetoothServer;
+import com.bowhead.bluetoothdemo.bluetooth.ble.BleScanResultList;
 import com.bowhead.bluetoothdemo.bluetooth.classic.BluetoothSocketListener;
 import com.bowhead.bluetoothdemo.bluetooth.classic.BluetoothSocketWrap;
 import com.orhanobut.logger.Logger;
@@ -41,15 +39,13 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity{
     private MyAdapter mAdapter;
 
-    private ScanResultList mData = new ScanResultList();
+    private BleScanResultList mData = new BleScanResultList();
 
     private BluetoothClient mBluetoothClient;
 
     private BluetoothSocketWrap mServerBluetoothSocketWrap;
 
     private BluetoothServer mBluetoothServer;
-
-    private BluetoothSocketListener mSocketListener;
 
     private BluetoothReceiver mBluetoothReceiver;
 
@@ -103,11 +99,9 @@ public class MainActivity extends AppCompatActivity{
         BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
 
         if (bluetoothManager != null){
-            mBluetoothServer = new BluetoothServer(this, bluetoothManager);
+            mBluetoothServer = new BluetoothServer(bluetoothManager);
 
-            mBluetoothClient = new BluetoothClient(this);
-
-            mSocketListener = new BluetoothSocketListener(bluetoothManager.getAdapter());
+            mBluetoothClient = BluetoothClient.getInstance(this);
 
             ScanFilter scanFilter = new ScanFilter.Builder()
                     .setServiceUuid(new ParcelUuid(GululuProfile.PAIR_SERVICE))
@@ -128,16 +122,15 @@ public class MainActivity extends AppCompatActivity{
                 public void onStateChange(int state, int previousState) {
                     if (state == BluetoothAdapter.STATE_ON){
                         Logger.d("bluetooth on");
-                        mBluetoothServer.startServer();
+                        mBluetoothServer.startGattServer(MainActivity.this);
                         mBluetoothServer.startAdvertising();
                         if (needOnBluetoothOpenScan){
-                            mBluetoothClient.startScan(mScanFilters, mScanSettings, mScanCallback, 15000);
+                            mBluetoothClient.startLeScan(mScanFilters, mScanSettings, mScanCallback, 15000);
                         }
                     }else if (state == BluetoothAdapter.STATE_TURNING_OFF){
                         Logger.d("bluetooth off");
                         mBluetoothServer.stopAdvertising();
-                        mBluetoothServer.stopServer();
-                        mSocketListener.stopListenConnect();
+                        mBluetoothServer.stopGattServer();
                         if (mServerBluetoothSocketWrap != null){
                             mServerBluetoothSocketWrap.closeSocket();
                         }
@@ -147,7 +140,7 @@ public class MainActivity extends AppCompatActivity{
             });
 
             if (mBluetoothClient.isBluetoothEnabled()){
-                mBluetoothServer.startServer();
+                mBluetoothServer.startGattServer(MainActivity.this);
                 mBluetoothServer.startAdvertising();
             }
 
@@ -173,29 +166,22 @@ public class MainActivity extends AppCompatActivity{
         listenButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mSocketListener.listenConnect(new BluetoothSocketListener.Callback() {
+                mBluetoothServer.listenConnect(new BluetoothSocketListener.Callback() {
                     @Override
-                    public void onAcceptSocket(BluetoothSocket socket) {
+                    public void onAcceptSocket(BluetoothSocketWrap socket) {
                         Log.d("CLD", "accept ok");
-
-                        mServerBluetoothSocketWrap = new BluetoothSocketWrap(socket, new BluetoothSocketWrap.Callback() {
+                        mServerBluetoothSocketWrap = socket;
+                        mServerBluetoothSocketWrap.startRead(new BluetoothSocketWrap.ReadCallback() {
                             @Override
                             public void onReceive(BluetoothDataOuterClass.BluetoothData data) {
-                                Log.d("CLD", "receive name = " + data.getName());
+
                             }
 
                             @Override
                             public void onError(Exception e) {
-                                Log.e("CLD", Log.getStackTraceString(e));
-                            }
 
-                            @Override
-                            public void onDisconnect() {
-                                Log.d("CLD", "server : socket disconnect");
                             }
                         });
-
-                        mServerBluetoothSocketWrap.startRead();
                     }
 
                     @Override
@@ -217,7 +203,7 @@ public class MainActivity extends AppCompatActivity{
             public void onClick(View v) {
                 if (mBluetoothClient.isBluetoothEnabled()){
                     Logger.d("scanButton click");
-                    mBluetoothClient.startScan(mScanFilters, mScanSettings, mScanCallback, 15000);
+                    mBluetoothClient.startLeScan(mScanFilters, mScanSettings, mScanCallback, 15000);
                 }else {
                     mBluetoothClient.enableBluetooth();
                     needOnBluetoothOpenScan = true;
@@ -242,13 +228,13 @@ public class MainActivity extends AppCompatActivity{
         super.onDestroy();
         unregisterReceiver(mBluetoothReceiver);
         if (mBluetoothClient.isBluetoothEnabled()){
-            mSocketListener.stopListenConnect();
+            mBluetoothServer.stopListenConnect();
             if (mServerBluetoothSocketWrap != null){
                 mServerBluetoothSocketWrap.closeSocket();
             }
             mBluetoothServer.stopAdvertising();
-            mBluetoothServer.stopServer();
-            mBluetoothClient.stopScan(mScanCallback);
+            mBluetoothServer.stopGattServer();
+            mBluetoothClient.stopLeScan(mScanCallback);
         }
     }
 
@@ -290,8 +276,8 @@ public class MainActivity extends AppCompatActivity{
                     Intent intent = new Intent(MainActivity.this, DetailActivity.class);
                     intent.putExtra("BluetoothDevice", result);
                     mBluetoothServer.stopAdvertising();
-                    mBluetoothServer.stopServer();
-                    mBluetoothClient.stopScan(mScanCallback);
+                    mBluetoothServer.stopGattServer();
+                    mBluetoothClient.stopLeScan(mScanCallback);
                     startActivity(intent);
                 }
             });

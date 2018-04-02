@@ -1,4 +1,4 @@
-package com.bowhead.bluetoothdemo.bluetooth.ble;
+package com.bowhead.bluetoothdemo;
 
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;

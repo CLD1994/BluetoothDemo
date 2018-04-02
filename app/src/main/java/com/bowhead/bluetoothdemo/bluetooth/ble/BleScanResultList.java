@@ -1,4 +1,4 @@
-package com.bowhead.bluetoothdemo.bluetooth;
+package com.bowhead.bluetoothdemo.bluetooth.ble;
 
 import android.bluetooth.le.ScanResult;
 
@@ -8,7 +8,7 @@ import java.util.ArrayList;
  * Created by cld.
  */
 
-public class ScanResultList extends ArrayList<ScanResult>{
+public class BleScanResultList extends ArrayList<ScanResult>{
     @Override
     public int indexOf(Object o) {
         if (o == null) {

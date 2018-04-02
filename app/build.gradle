@@ -27,7 +27,8 @@ dependencies {
     implementation 'com.android.support:recyclerview-v7:26.1.0'
     implementation 'com.android.support:design:26.1.0'
     implementation 'com.google.protobuf:protobuf-lite:3.0.1'
-    implementation 'com.orhanobut:logger:2.1.1'
+    implementation 'com.orhanobut:logger:2.2.0'
+    implementation 'com.polidea.rxandroidble2:rxandroidble:1.5.0'
 }
 
 protobuf {

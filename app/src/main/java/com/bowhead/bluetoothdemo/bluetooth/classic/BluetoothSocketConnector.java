@@ -1,6 +1,5 @@
 package com.bowhead.bluetoothdemo.bluetooth.classic;
 
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.Handler;
@@ -25,24 +24,19 @@ public class BluetoothSocketConnector {
 
     private ConnectThread mConnectThread;
 
-    private final BluetoothAdapter mBluetoothAdapter;
+    public void connect(BluetoothDevice device, final ConnectCallback connectCallback){
 
-    public BluetoothSocketConnector(BluetoothAdapter bluetoothAdapter) {
-        mBluetoothAdapter = bluetoothAdapter;
-    }
-
-    public boolean connect(BluetoothDevice device, final ConnectCallback connectCallback){
-
-        if (!mBluetoothAdapter.isEnabled()) {
-            return false;
-        }
-
-        mConnectThread = new ConnectThread(device, mBluetoothAdapter, new Handler(Looper.getMainLooper(), new Handler.Callback() {
+        mConnectThread = new ConnectThread(device, new Handler(Looper.getMainLooper(), new Handler.Callback() {
             @Override
             public boolean handleMessage(Message msg) {
                 switch (msg.what){
                     case MESSAGE_CONNECTED:
-                        connectCallback.onConnected((BluetoothSocket) msg.obj);
+                        try {
+                            BluetoothSocketWrap socketWrap = new BluetoothSocketWrap((BluetoothSocket) msg.obj);
+                            connectCallback.onConnected(socketWrap);
+                        } catch (IOException e) {
+                            connectCallback.onError(e);
+                        }
                         break;
                     case MESSAGE_CONNECT_ERROR:
                         connectCallback.onError((IOException) msg.obj);
@@ -56,8 +50,6 @@ public class BluetoothSocketConnector {
             }
         }));
         mConnectThread.start();
-
-        return true;
     }
 
     public void cancelConnect(){
@@ -69,11 +61,9 @@ public class BluetoothSocketConnector {
 
     private static class ConnectThread extends Thread {
         private final BluetoothSocket mmSocket;
-        private final BluetoothAdapter mmAdapter;
         private final Handler mmHandler;
 
-        public ConnectThread(BluetoothDevice device, BluetoothAdapter adapter, Handler handler){
-            mmAdapter = adapter;
+        private ConnectThread(BluetoothDevice device, Handler handler){
             mmHandler = handler;
             BluetoothSocket temp = null;
             try {
@@ -85,8 +75,6 @@ public class BluetoothSocketConnector {
         }
 
         public void run() {
-            mmAdapter.cancelDiscovery();
-
             try {
                 Log.d("CLD" , "wait connect");
                 mmSocket.connect();
@@ -104,7 +92,7 @@ public class BluetoothSocketConnector {
             }
         }
 
-        public void cancel() {
+        private void cancel() {
             try {
                 mmHandler.sendEmptyMessageDelayed(MESSAGE_CANCEL, 200);
                 mmSocket.close();
@@ -118,7 +106,7 @@ public class BluetoothSocketConnector {
     }
 
     public interface ConnectCallback {
-        void onConnected(BluetoothSocket socket);
+        void onConnected(BluetoothSocketWrap socket);
         void onError(IOException e);
         void onCancel();
     }
